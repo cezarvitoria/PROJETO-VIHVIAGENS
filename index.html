@@ -157,7 +157,9 @@ setTimeout(()=>t.classList.remove('on'),2300);
 }
 
 function totalExpenses(t){
-return (t.expenses||[]).reduce((a,x)=>a+Number(x.amount||0),0);
+const expenses=(t.expenses||[]).reduce((sum,x)=>sum+Number(x.amount||0),0);
+const activities=(t.acts||[]).reduce((sum,a)=>sum+Number(a.cost||0),0);
+return expenses+activities;
 }
 
 function tripBy(id){
@@ -596,7 +598,7 @@ let rows=db.trips.flatMap(t=>
 t.expenses.map(e=>({...e,trip:t.name,tripId:t.id}))
 );
 
-let sum=rows.reduce((a,e)=>a+e.amount,0);
+let sum=db.trips.reduce((total,t)=>total+totalExpenses(t),0);
 
 return `
 <div class="top">
