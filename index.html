@@ -58,6 +58,17 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-
 .panel{padding:18px}.actions{display:flex;gap:6px;flex-wrap:wrap}
 .kpi,.small{font-size:13px;color:var(--mut)}
 .calendar-wrap{overflow:auto}.item-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+.photo-section{padding:14px;border-top:1px solid var(--bd)}
+.photo-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:9px}
+.photo-thumb{position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--bd)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.photo-thumb button{position:absolute;top:5px;right:5px;padding:3px 7px;border:0;border-radius:8px;background:rgba(30,30,30,.8);color:white;cursor:pointer}
+.photo-caption{font-size:12px;color:var(--mut);padding:4px 2px;overflow-wrap:anywhere}
+.photo-empty{font-size:13px;color:var(--mut);padding:8px 0}
+.photo-upload{display:inline-block;cursor:pointer}
+.photo-upload input{display:none}
+.photo-viewer{max-width:100%;max-height:68vh;object-fit:contain;display:block;margin:12px auto;border-radius:12px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2d2a32;color:#fff;padding:10px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw}
 #toast.on{opacity:1}
 @media(max-width:800px){
@@ -337,7 +348,7 @@ return `
 </div>
 <button class="btn" id="addAct">＋ Adicionar atividade</button>
 </div>
-<div class="tabs">
+<div class="photo-section card" style="margin-bottom:16px"><div class="photo-head"><strong>📷 Fotos da viagem</strong><span class="small">Imagens gerais desta viagem</span></div><div data-photo-gallery data-owner-type="trip" data-owner-id="${t.id}"></div></div><div class="tabs">
 <button class="on" data-tab="acts">Roteiro (${t.acts.length})</button>
 <button data-tab="expenses">Despesas (${t.expenses.length})</button>
 <button data-tab="notes">Anotações</button>
@@ -356,6 +367,7 @@ ${t.acts.slice().sort((a,b)=>(a.date+a.st).localeCompare(b.date+b.st)).map(a=>`
 <div class="m">${date(a.date)} ${a.st?'· '+a.st:''} ${a.place?'· '+esc(a.place):''}</div>
 ${a.notes?`<div class="small">${esc(a.notes)}</div>`:''}
 ${a.link?`<a href="${esc(a.link)}" target="_blank" rel="noopener">Abrir link</a>`:''}
+<div class="photo-section" style="padding:10px 0 0;border:0"><div class="photo-head"><strong class="small">📷 Fotos desta atividade</strong></div><div data-photo-gallery data-owner-type="activity" data-owner-id="${a.id}"></div></div>
 </div>
 <div class="item-actions">
 <button class="btn ghost sm" data-edit-act="${a.id}">Editar</button>
@@ -521,7 +533,18 @@ notify('Anotações salvas!');
 let add=document.getElementById('addExpense');
 
 if(add)add.onclick=()=>expenseForm(t);
+bindPhotoGalleries();
 }
+
+// Fotos guardadas no IndexedDB deste navegador, separadas por viagem e atividade.
+const PHOTO_DB='plannerViagensFotos';
+function openPhotoDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(PHOTO_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('photos'))req.result.createObjectStore('photos',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+async function photoRequest(mode,action,value){const database=await openPhotoDB();return new Promise((resolve,reject)=>{const tx=database.transaction('photos',mode),store=tx.objectStore('photos');const req=action==='all'?store.getAll():action==='put'?store.put(value):store.delete(value);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.oncomplete=()=>database.close();tx.onerror=()=>reject(tx.error);});}
+function fileData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});}
+function photoMarkup(photos){return '<label class="btn ghost sm photo-upload">＋ Adicionar fotos<input type="file" accept="image/*" multiple></label><div class="photo-grid" style="margin-top:10px">'+photos.map(p=>'<div><div class="photo-thumb"><img src="'+p.dataUrl+'" alt="'+esc(p.caption||p.name)+'" data-view-photo="'+p.id+'"><button type="button" data-remove-photo="'+p.id+'">×</button></div><div class="photo-caption">'+esc(p.caption||p.name)+'</div></div>').join('')+'</div>'+(photos.length?'':'<div class="photo-empty">Nenhuma foto adicionada ainda.</div>');}
+async function refreshPhotoGallery(box){const type=box.dataset.ownerType,owner=box.dataset.ownerId;const all=await photoRequest('readonly','all');const photos=all.filter(p=>p.ownerType===type&&p.ownerId===owner).sort((a,b)=>a.createdAt-b.createdAt);box.innerHTML=photoMarkup(photos);bindPhotoGalleryControls(box,photos);}
+function bindPhotoGalleryControls(box,photos){const input=box.querySelector('input[type=file]');if(input)input.onchange=async()=>{const files=Array.from(input.files||[]);try{for(const file of files){if(!file.type.startsWith('image/'))continue;const dataUrl=await fileData(file);const caption=prompt('Legenda para esta foto (opcional):','')||'';await photoRequest('readwrite','put',{id:id(),ownerType:box.dataset.ownerType,ownerId:box.dataset.ownerId,name:file.name,caption,dataUrl,createdAt:Date.now()});}notify('Foto(s) adicionada(s)!');await refreshPhotoGallery(box);}catch(err){console.error(err);notify('Não foi possível salvar. Tente imagens menores.');}};box.querySelectorAll('[data-remove-photo]').forEach(btn=>btn.onclick=async()=>{if(!confirm('Excluir esta foto?'))return;await photoRequest('readwrite','delete',btn.dataset.removePhoto);await refreshPhotoGallery(box);});box.querySelectorAll('[data-view-photo]').forEach(img=>img.onclick=()=>{const photo=photos.find(p=>p.id===img.dataset.viewPhoto);if(!photo)return;modal('<div class="photo-head"><strong>'+esc(photo.caption||photo.name)+'</strong><button class="btn ghost sm" id="closePhoto">Fechar</button></div><img class="photo-viewer" src="'+photo.dataUrl+'" alt="'+esc(photo.caption||photo.name)+'">');const close=document.getElementById('closePhoto');if(close)close.onclick=closeModal;});}
+async function bindPhotoGalleries(){document.querySelectorAll('[data-photo-gallery]').forEach(async box=>{box.innerHTML='<div class="photo-empty">Carregando fotos...</div>';try{await refreshPhotoGallery(box);}catch(err){console.error(err);box.innerHTML='<div class="photo-empty">Não foi possível carregar as fotos neste navegador.</div>';}});}
 
 function expenseList(t){
 return `
