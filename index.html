@@ -23,7 +23,7 @@ h1{margin:0 0 4px;font-size:26px}h2{font-size:18px;margin:26px 0 12px}.sub{color
 .btn.ghost{background:var(--pri2);color:var(--pri)}.btn.red{background:var(--bad)}.btn.sm{padding:6px 10px;font-size:13px}
 .link{background:none;border:0;color:var(--pri);cursor:pointer;font:inherit;padding:0}
 .card{background:var(--card);border-radius:20px;box-shadow:var(--sh);border:1px solid var(--bd);overflow:hidden}
-.trip .cv{height:130px;background:linear-gradient(120deg,#6c8ca8,#b8c6b1);display:flex;align-items:flex-end;padding:12px;color:white}
+.trip .cv{height:164px;background:linear-gradient(120deg,#6c8ca8,#b8c6b1);background-size:cover;background-position:center;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:12px;color:white;position:relative}.cv b{position:relative;text-shadow:0 1px 4px rgba(0,0,0,.45)}.cover-pick{font-size:11px;background:rgba(20,25,30,.68);color:white;border:1px solid rgba(255,255,255,.55);border-radius:8px;padding:7px 9px;cursor:pointer;white-space:nowrap}.cover-pick input{display:none}
 .trip .bd{padding:14px 16px}.trip h3{margin:0 0 2px;font-size:17px}
 .trip p{margin:8px 0;color:var(--mut);font-size:13px;min-height:36px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -301,7 +301,7 @@ let pct=t.budget?Math.min(100,spent/t.budget*100):0;
 
 return `
 <article class="card trip">
-<div class="cv"><b>${t.start_date?date(t.start_date):'Viagem'}</b></div>
+<div class="cv" data-cover-trip="${t.id}"><b>${t.start_date?date(t.start_date):'Viagem'}</b><label class="cover-pick">📷 Adicionar capa<input type="file" accept="image/*"></label></div>
 <div class="bd">
 <h3>${esc(t.name)}</h3>
 <div class="sub small">📍 ${esc(t.dest||'Destino não definido')}</div>
@@ -544,6 +544,14 @@ function fileData(file){return new Promise((resolve,reject)=>{const reader=new F
 function photoMarkup(photos){return '<label class="btn ghost sm photo-upload">＋ Adicionar fotos<input type="file" accept="image/*" multiple></label><div class="photo-grid" style="margin-top:10px">'+photos.map(p=>'<div><div class="photo-thumb"><img src="'+p.dataUrl+'" alt="'+esc(p.caption||p.name)+'" data-view-photo="'+p.id+'"><button type="button" data-remove-photo="'+p.id+'">×</button></div><div class="photo-caption">'+esc(p.caption||p.name)+'</div></div>').join('')+'</div>'+(photos.length?'':'<div class="photo-empty">Nenhuma foto adicionada ainda.</div>');}
 async function refreshPhotoGallery(box){const type=box.dataset.ownerType,owner=box.dataset.ownerId;const all=await photoRequest('readonly','all');const photos=all.filter(p=>p.ownerType===type&&p.ownerId===owner).sort((a,b)=>a.createdAt-b.createdAt);box.innerHTML=photoMarkup(photos);bindPhotoGalleryControls(box,photos);}
 function bindPhotoGalleryControls(box,photos){const input=box.querySelector('input[type=file]');if(input)input.onchange=async()=>{const files=Array.from(input.files||[]);try{for(const file of files){if(!file.type.startsWith('image/'))continue;const dataUrl=await fileData(file);const caption=prompt('Legenda para esta foto (opcional):','')||'';await photoRequest('readwrite','put',{id:id(),ownerType:box.dataset.ownerType,ownerId:box.dataset.ownerId,name:file.name,caption,dataUrl,createdAt:Date.now()});}notify('Foto(s) adicionada(s)!');await refreshPhotoGallery(box);}catch(err){console.error(err);notify('Não foi possível salvar. Tente imagens menores.');}};box.querySelectorAll('[data-remove-photo]').forEach(btn=>btn.onclick=async()=>{if(!confirm('Excluir esta foto?'))return;await photoRequest('readwrite','delete',btn.dataset.removePhoto);await refreshPhotoGallery(box);});box.querySelectorAll('[data-view-photo]').forEach(img=>img.onclick=()=>{const photo=photos.find(p=>p.id===img.dataset.viewPhoto);if(!photo)return;modal('<div class="photo-head"><strong>'+esc(photo.caption||photo.name)+'</strong><button class="btn ghost sm" id="closePhoto">Fechar</button></div><img class="photo-viewer" src="'+photo.dataUrl+'" alt="'+esc(photo.caption||photo.name)+'">');const close=document.getElementById('closePhoto');if(close)close.onclick=closeModal;});}
+async function bindTripCovers(){
+document.querySelectorAll('[data-cover-trip]').forEach(async box=>{
+const tripId=box.dataset.coverTrip;
+try{const all=await photoRequest('readonly','all');const cover=all.find(p=>p.ownerType==='trip-cover'&&p.ownerId===tripId);if(cover)box.style.backgroundImage='linear-gradient(0deg,rgba(0,0,0,.4),rgba(0,0,0,.03)),url('+JSON.stringify(cover.dataUrl)+')';}catch(err){console.error(err);}
+const input=box.querySelector('input[type=file]');
+if(input)input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;if(!file.type.startsWith('image/')){notify('Escolha um arquivo de imagem.');return;}try{const all=await photoRequest('readonly','all');const previous=all.filter(p=>p.ownerType==='trip-cover'&&p.ownerId===tripId);for(const p of previous)await photoRequest('readwrite','delete',p.id);const dataUrl=await fileData(file);await photoRequest('readwrite','put',{id:id(),ownerType:'trip-cover',ownerId:tripId,name:file.name,caption:'Capa da viagem',dataUrl,createdAt:Date.now()});box.style.backgroundImage='linear-gradient(0deg,rgba(0,0,0,.4),rgba(0,0,0,.03)),url('+JSON.stringify(dataUrl)+')';notify('Capa da viagem salva!');}catch(err){console.error(err);notify('Não foi possível salvar a capa. Tente uma imagem menor.');}};
+});
+}
 async function bindPhotoGalleries(){document.querySelectorAll('[data-photo-gallery]').forEach(async box=>{box.innerHTML='<div class="photo-empty">Carregando fotos...</div>';try{await refreshPhotoGallery(box);}catch(err){console.error(err);box.innerHTML='<div class="photo-empty">Não foi possível carregar as fotos neste navegador.</div>';}});}
 
 function expenseList(t){
@@ -728,6 +736,7 @@ ${field('Nome','name',db.settings.name||'Meu Planner de Viagens')}
 }
 
 function bind(){
+bindTripCovers();
 
 let n=document.getElementById('newTrip');
 if(n)n.onclick=()=>tripForm();
