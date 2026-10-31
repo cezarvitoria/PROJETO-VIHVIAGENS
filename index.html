@@ -163,7 +163,7 @@ const estimated=(t.acts||[]).flatMap(a=>{
 const items=a.costItems&&a.costItems.length?a.costItems:(Number(a.cost||0)>0?[{value:a.cost,note:'Custo estimado da atividade'}]:[]);
 return items.filter(item=>Number(item.value||0)>0).map((item,index)=>({
 id:'estimated-'+a.id+'-'+index,descr:item.note||('Custo estimado: '+a.name),
-date:a.date||'',cat:a.cat||'other',amount:Number(item.value||0),source:'activity',activity:a.name
+date:a.date||'',cat:a.cat||'outros',amount:Number(item.value||0),source:'activity',activity:a.name
 }));
 });
 return [...manual,...estimated];
@@ -596,6 +596,7 @@ if(input)input.onchange=async()=>{const file=input.files&&input.files[0];if(!fil
 async function bindPhotoGalleries(){document.querySelectorAll('[data-photo-gallery]').forEach(async box=>{box.innerHTML='<div class="photo-empty">Carregando fotos...</div>';try{await refreshPhotoGallery(box);}catch(err){console.error(err);box.innerHTML='<div class="photo-empty">Não foi possível carregar as fotos neste navegador.</div>';}});}
 
 function expenseList(t){
+const rows=tripExpenseRows(t);
 return `
 <div class="top">
 <div>
@@ -605,7 +606,7 @@ return `
 <button class="btn" id="addExpense">＋ Nova despesa</button>
 </div>
 
-${t.expenses.length?
+${rows.length?
 `<div class="card tw">
 <table>
 <thead>
@@ -614,16 +615,13 @@ ${t.expenses.length?
 </tr>
 </thead>
 <tbody>
-${t.expenses.map(e=>`
+${rows.map(e=>`
 <tr>
 <td>${esc(e.descr)}</td>
 <td>${date(e.date)}</td>
 <td>${CATS[e.cat]||'Outros'}</td>
 <td class="r">${money(e.amount)}</td>
-<td>
-<button class="btn ghost sm" data-edit-exp="${e.id}">Editar</button>
-<button class="btn red sm" data-del-exp="${e.id}">×</button>
-</td>
+<td>${e.source==='activity'?'<span class="tag">Custo estimado</span>':`<button class="btn ghost sm" data-edit-exp="${e.id}">Editar</button> <button class="btn red sm" data-del-exp="${e.id}">×</button>`}</td>
 </tr>`).join('')}
 </tbody>
 </table>
@@ -634,7 +632,7 @@ ${t.expenses.map(e=>`
 
 function expenses(){
 let rows=db.trips.flatMap(t=>
-t.expenses.map(e=>({...e,trip:t.name,tripId:t.id}))
+tripExpenseRows(t).map(e=>({...e,trip:t.name,tripId:t.id}))
 );
 
 let sum=db.trips.reduce((total,t)=>total+totalExpenses(t),0);
