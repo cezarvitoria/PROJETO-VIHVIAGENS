@@ -157,10 +157,19 @@ t.classList.add('on');
 setTimeout(()=>t.classList.remove('on'),2300);
 }
 
+function tripExpenseRows(t){
+const manual=(t.expenses||[]).map(e=>({...e,source:'manual'}));
+const estimated=(t.acts||[]).flatMap(a=>{
+const items=a.costItems&&a.costItems.length?a.costItems:(Number(a.cost||0)>0?[{value:a.cost,note:'Custo estimado da atividade'}]:[]);
+return items.filter(item=>Number(item.value||0)>0).map((item,index)=>({
+id:'estimated-'+a.id+'-'+index,descr:item.note||('Custo estimado: '+a.name),
+date:a.date||'',cat:a.cat||'other',amount:Number(item.value||0),source:'activity',activity:a.name
+}));
+});
+return [...manual,...estimated];
+}
 function totalExpenses(t){
-const expenses=(t.expenses||[]).reduce((sum,x)=>sum+Number(x.amount||0),0);
-const activities=(t.acts||[]).reduce((sum,a)=>sum+Number(a.cost||0),0);
-return expenses+activities;
+return tripExpenseRows(t).reduce((sum,x)=>sum+Number(x.amount||0),0);
 }
 
 function tripBy(id){
@@ -405,7 +414,11 @@ ${Object.entries(CATS).map(([k,v])=>`<option value="${k}" ${a.cat===k?'selected'
 </select>
 ${field('Local','place',a.place||'')}
 ${field('Endereço','addr',a.addr||'')}
-${field('Custo estimado (R$)','cost',a.cost??'','number','min="0" step="0.01"')}
+<label>Custos estimados da atividade</label>
+<div id="costItems">
+${(a.costItems&&a.costItems.length?a.costItems:(Number(a.cost||0)>0?[{value:a.cost,note:'Custo estimado da atividade'}]:[{value:'',note:''}])).map((item,i)=>`<div class="two cost-row" style="align-items:end;gap:10px;margin-bottom:8px"><div>${field('Valor (R$)','cost_value',item.value??'','number','min="0" step="0.01"')}</div><div>${field('Para que é?','cost_note',item.note||'')}</div><button type="button" class="btn red sm remove-cost" title="Remover item">×</button></div>`).join('')}
+</div>
+<button type="button" class="btn ghost sm" id="addCostItem">＋ Adicionar outro valor</button>
 ${field('Link (opcional)','link',a.link||'','url')}
 <label>Observações</label>
 <textarea name="notes" rows="3">${esc(a.notes||'')}</textarea>
@@ -416,15 +429,30 @@ ${field('Link (opcional)','link',a.link||'','url')}
 </form>`);
 
 document.getElementById('cancel').onclick=closeModal;
-
+const costContainer=document.getElementById('costItems');
+function bindCostRows(){
+costContainer.querySelectorAll('.remove-cost').forEach(btn=>btn.onclick=()=>{
+if(costContainer.querySelectorAll('.cost-row').length===1){
+const row=btn.closest('.cost-row');row.querySelector('[name="cost_value"]').value='';row.querySelector('[name="cost_note"]').value='';
+}else btn.closest('.cost-row').remove();
+});
+}
+document.getElementById('addCostItem').onclick=()=>{
+const row=document.createElement('div');row.className='two cost-row';row.style.cssText='align-items:end;gap:10px;margin-bottom:8px';
+row.innerHTML='<div><label>Valor (R$)</label><input name="cost_value" type="number" min="0" step="0.01"></div><div><label>Para que é?</label><input name="cost_note" type="text" placeholder="Ex.: alimentação, ingresso..."></div><button type="button" class="btn red sm remove-cost">×</button>';
+costContainer.appendChild(row);bindCostRows();
+};
+bindCostRows();
 document.getElementById('actForm').onsubmit=e=>{
 e.preventDefault();
 let o=Object.fromEntries(new FormData(e.target));
-
 if(!o.name.trim())return notify('Informe o nome.');
-
-o.cost=Number(o.cost||0);
-
+o.costItems=Array.from(e.target.querySelectorAll('.cost-row')).map(row=>({
+value:Number(row.querySelector('[name="cost_value"]').value||0),
+note:row.querySelector('[name="cost_note"]').value.trim()
+})).filter(item=>item.value>0||item.note);
+o.cost=o.costItems.reduce((sum,item)=>sum+item.value,0);
+delete o.cost_value;delete o.cost_note;
 if(a.id)Object.assign(a,o);
 else t.acts.push({...o,id:id()});
 
