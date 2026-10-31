@@ -70,6 +70,7 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-
 .photo-upload input{display:none}
 .photo-viewer{max-width:100%;max-height:68vh;object-fit:contain;display:block;margin:12px auto;border-radius:12px}
 .schedule-day{padding:14px 16px;border-bottom:1px solid var(--bd)}.schedule-day:last-child{border-bottom:0}.schedule-date{font-weight:700;margin-bottom:10px;color:var(--pri)}.schedule-item{display:grid;grid-template-columns:76px 1fr;gap:12px;padding:9px 0}.schedule-time{font-weight:700;font-size:13px;color:var(--mut)}.schedule-name{font-weight:700}.schedule-meta{font-size:12px;color:var(--mut);margin-top:3px}.schedule-notes{font-size:13px;margin-top:5px;white-space:pre-wrap}
+.calendar-agenda{margin-top:18px;padding:16px}.calendar-agenda h2{margin:0 0 12px}.agenda-day{padding:12px 0;border-bottom:1px solid var(--bd)}.agenda-day:last-child{border:0}.agenda-date{font-weight:700;color:var(--pri);margin-bottom:7px}.agenda-row{display:grid;grid-template-columns:76px 1fr;gap:10px;padding:6px 0}.agenda-time{font-size:13px;font-weight:700;color:var(--mut)}.agenda-title{font-weight:600}.agenda-trip{font-size:12px;color:var(--mut)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2d2a32;color:#fff;padding:10px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw}
 #toast.on{opacity:1}
 @media(max-width:800px){
@@ -688,6 +689,8 @@ days.push(d);
 }
 
 let today=new Date().toISOString().slice(0,10);
+let allActivities=db.trips.flatMap(t=>(t.acts||[]).filter(a=>a.date).map(a=>({...a,trip:t.name,tripId:t.id}))).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.st||'99:99').localeCompare(b.st||'99:99')||a.name.localeCompare(b.name));
+let agendaGroups={};allActivities.forEach(a=>(agendaGroups[a.date]??=[]).push(a));
 
 return `
 <div class="top">
@@ -709,20 +712,19 @@ ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(x=>`<div>${x}</div>`).join(''
 <div class="cg">
 ${days.map(d=>{
 let ds=d.toISOString().slice(0,10);
-let items=db.trips.flatMap(t=>
-t.acts.map(a=>({...a,trip:t.name}))
-).filter(a=>a.date===ds);
+let items=db.trips.flatMap(t=>(t.acts||[]).map(a=>({...a,trip:t.name}))).filter(a=>a.date===ds).sort((a,b)=>(a.st||'99:99').localeCompare(b.st||'99:99')||a.name.localeCompare(b.name));
 
 return `
 <div class="cell ${d.getMonth()===m?'in':'out'} ${ds===today?'today':''} ${items.length?'has':''}">
 <span class="n">${d.getDate()}</span>
-${items.slice(0,2).map(a=>`<div class="chip" title="${esc(a.name)}">${esc(a.name)}</div>`).join('')}
+${items.slice(0,3).map(a=>`<div class="chip" title="${esc(a.name)} · ${esc(a.trip)}">${a.st?esc(a.st)+' · ':''}${esc(a.name)}</div>`).join('')}
 ${items.length>2?`<div class="more">+${items.length-2} mais</div>`:''}
 </div>`;
 }).join('')}
 </div>
 </div>
-<p class="sub small">O calendário exibe atividades cadastradas dentro dos roteiros das suas viagens.</p>
+<div class="card calendar-agenda"><h2>Agenda de todas as viagens</h2>${Object.keys(agendaGroups).length?Object.entries(agendaGroups).map(([day,items])=>`<section class="agenda-day"><div class="agenda-date">📅 ${date(day)}</div>${items.map(a=>`<div class="agenda-row"><div class="agenda-time">${a.st?esc(a.st):'Sem horário'}${a.et?' – '+esc(a.et):''}</div><div><div class="agenda-title">${esc(a.name)}</div><div class="agenda-trip">${esc(a.trip)}${a.place?' · 📍 '+esc(a.place):''}</div></div></div>`).join('')}</section>`).join(''):'<div class="sub">Ainda não há atividades com data cadastrada nas viagens.</div>'}</div>
+<p class="sub small">As atividades de todas as viagens são organizadas por data e horário, da primeira à última.</p>
 `;
 }function notes(){
 return `
