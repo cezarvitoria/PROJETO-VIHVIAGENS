@@ -69,6 +69,7 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-
 .photo-upload{display:inline-block;cursor:pointer}
 .photo-upload input{display:none}
 .photo-viewer{max-width:100%;max-height:68vh;object-fit:contain;display:block;margin:12px auto;border-radius:12px}
+.schedule-day{padding:14px 16px;border-bottom:1px solid var(--bd)}.schedule-day:last-child{border-bottom:0}.schedule-date{font-weight:700;margin-bottom:10px;color:var(--pri)}.schedule-item{display:grid;grid-template-columns:76px 1fr;gap:12px;padding:9px 0}.schedule-time{font-weight:700;font-size:13px;color:var(--mut)}.schedule-name{font-weight:700}.schedule-meta{font-size:12px;color:var(--mut);margin-top:3px}.schedule-notes{font-size:13px;margin-top:5px;white-space:pre-wrap}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2d2a32;color:#fff;padding:10px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:30;max-width:90vw}
 #toast.on{opacity:1}
 @media(max-width:800px){
@@ -352,10 +353,19 @@ return `
 </div>
 <div class="photo-section card" style="margin-bottom:16px"><div class="photo-head"><strong>📷 Fotos da viagem</strong><span class="small">Imagens gerais desta viagem</span></div><div data-photo-gallery data-owner-type="trip" data-owner-id="${t.id}"></div></div><div class="tabs">
 <button class="on" data-tab="acts">Roteiro (${t.acts.length})</button>
+<button data-tab="schedule">Cronograma</button>
 <button data-tab="expenses">Despesas (${t.expenses.length})</button>
 <button data-tab="notes">Anotações</button>
 </div>
 <div id="tripTab">${actsView(t)}</div>`;
+}
+
+function scheduleView(t){
+const activities=(t.acts||[]).slice().sort((a,b)=>((a.date||'9999-99-99')+(a.st||'99:99')).localeCompare((b.date||'9999-99-99')+(b.st||'99:99')));
+if(!activities.length)return '<div class="card empty">Adicione atividades com datas e horários para montar o cronograma da viagem.</div>';
+const dated=activities.filter(a=>a.date),undated=activities.filter(a=>!a.date);
+const groups={};dated.forEach(a=>(groups[a.date]??=[]).push(a));
+return '<div class="card">'+Object.entries(groups).map(([day,items])=>'<section class="schedule-day"><div class="schedule-date">📅 '+date(day)+'</div>'+items.map(a=>'<div class="schedule-item"><div class="schedule-time">'+(a.st||'Sem horário')+(a.et?' – '+a.et:'')+'</div><div><div class="schedule-name">'+esc(a.name)+'</div><div class="schedule-meta">'+(CATS[a.cat]||'Outros')+(a.place?' · 📍 '+esc(a.place):'')+'</div>'+(a.notes?'<div class="schedule-notes">'+esc(a.notes)+'</div>':'')+'</div></div>').join('')+'</section>').join('')+(undated.length?'<section class="schedule-day"><div class="schedule-date">📌 Sem data definida</div>'+undated.map(a=>'<div class="schedule-item"><div class="schedule-time">'+(a.st||'Sem horário')+'</div><div><div class="schedule-name">'+esc(a.name)+'</div>'+(a.place?'<div class="schedule-meta">📍 '+esc(a.place)+'</div>':'')+'</div></div>').join('')+'</section>':'')+'</div>';
 }
 
 function actsView(t){
@@ -481,6 +491,7 @@ let target=document.getElementById('tripTab');
 
 target.innerHTML=
 b.dataset.tab==='acts'?actsView(t):
+b.dataset.tab==='schedule'?scheduleView(t):
 b.dataset.tab==='expenses'?expenseList(t):
 `<div class="card panel">
 <h2>Anotações da viagem</h2>
