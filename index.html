@@ -85,9 +85,27 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-
 .auth-card button{width:100%;margin-top:12px}.auth-error{color:var(--bad);font-size:13px;min-height:20px;margin-top:8px}
 #app[hidden],#auth-screen[hidden]{display:none!important}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<div id="app">
+    <div id="auth-screen">
+  <form class="auth-card" id="auth-form">
+    <h1 id="auth-title">Entrar na sua conta</h1>
+    <p>Acesse suas viagens ou crie uma conta para começar.</p>
+
+    <label for="auth-email">E-mail</label>
+    <input id="auth-email" type="email" autocomplete="email" required placeholder="seu@email.com">
+
+    <label for="auth-password">Senha</label>
+    <input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Sua senha">
+
+    <button class="btn" id="auth-submit" type="submit">Entrar</button>
+    <button class="link" id="auth-toggle" type="button">Criar uma conta</button>
+
+    <div class="auth-error" id="auth-error" role="alert" aria-live="polite"></div>
+  </form>
+</div>
+<div id="app" hidden>
 <aside>
 <div class="logo">🧭 Meu <span>Planner</span></div>
 <p class="me" id="account-label">Suas viagens em um só lugar</p><button class="nav" id="logout">↪ Sair da conta</button>
