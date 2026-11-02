@@ -78,13 +78,19 @@ input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-
 .me,.sep{display:none}.logo{margin:0 10px 0 4px}main{padding:16px}.two{grid-template-columns:1fr}
 .cell{min-height:58px}.chip{display:none}aside .nav{padding:8px 10px;font-size:13px}
 }
+
+#auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg)}
+.auth-card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:28px;box-shadow:var(--sh)}
+.auth-card h1{margin-bottom:6px}.auth-card p{color:var(--mut);margin-top:0}
+.auth-card button{width:100%;margin-top:12px}.auth-error{color:var(--bad);font-size:13px;min-height:20px;margin-top:8px}
+#app[hidden],#auth-screen[hidden]{display:none!important}
 </style>
 </head>
 <body>
 <div id="app">
 <aside>
 <div class="logo">🧭 Meu <span>Planner</span></div>
-<p class="me">Suas viagens em um só lugar</p>
+<p class="me" id="account-label">Suas viagens em um só lugar</p><button class="nav" id="logout">↪ Sair da conta</button>
 <button class="nav on" data-page="home">🏠 Visão geral</button>
 <button class="nav" data-page="trips">🧳 Minhas viagens</button>
 <button class="nav" data-page="calendar">📅 Calendário</button>
@@ -127,6 +133,7 @@ return {trips:[],settings:{name:'Meu Planner de Viagens'}};
 
 function save(){
 localStorage.setItem(KEY,JSON.stringify(db));
+if(cloudReady && currentUser) syncCloud();
 }
 
 function id(){
@@ -800,6 +807,7 @@ let t=tripBy(b.dataset.delete);
 if(confirm(`Excluir a viagem "${t.name}" e todos os seus dados?`)){
 db.trips=db.trips.filter(x=>x.id!==t.id);
 save();
+deleteCloudTrip(t.id);
 render();
 notify('Viagem excluída.');
 }
@@ -880,6 +888,101 @@ notify('Dados apagados.');
 };
 
 }
+
+
+const SUPABASE_URL='https://lhwholqaajqpumpyhehi.supabase.co';
+const SUPABASE_KEY='sb_publishable_yGrX-cGOSF3AIp4gx4efGQ_m1iOyfFF';
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let currentUser=null,cloudReady=false,cloudSyncTimer=null,authMode='login';
+
+function authMessage(message){document.getElementById('auth-error').textContent=message||'';}
+function showAuth(mode='login'){
+  authMode=mode;
+  document.getElementById('auth-title').textContent=mode==='login'?'Entrar na sua conta':'Criar sua conta';
+  document.getElementById('auth-submit').textContent=mode==='login'?'Entrar':'Criar conta';
+  document.getElementById('auth-toggle').textContent=mode==='login'?'Criar uma conta':'Já tenho uma conta';
+  document.getElementById('auth-password').autocomplete=mode==='login'?'current-password':'new-password';
+  authMessage('');
+  document.getElementById('auth-screen').hidden=false;
+  document.getElementById('app').hidden=true;
+}
+async function applySession(session){
+  currentUser=session?.user||null;
+  cloudReady=false;
+  if(!currentUser){showAuth('login');return;}
+  document.getElementById('auth-screen').hidden=true;
+  document.getElementById('app').hidden=false;
+  document.getElementById('account-label').textContent=currentUser.email||'Conta conectada';
+  try{
+    const {data:rows,error}=await supabaseClient.from('trips').select('id,name,trip_data').order('created_at',{ascending:true});
+    if(error)throw error;
+    if(rows.length===0 && db.trips.length){
+      const payload=db.trips.map(t=>({id:String(t.id),owner_id:currentUser.id,name:t.name||'Viagem',trip_data:t}));
+      const {error:upErr}=await supabaseClient.from('trips').upsert(payload,{onConflict:'id'});
+      if(upErr)throw upErr;
+    }else if(rows.length){
+      localStorage.setItem(KEY+'_backup_pre_cloud',JSON.stringify(db));
+      db.trips=rows.map(row=>row.trip_data).filter(Boolean);
+      saveLocalOnly();
+    }
+    cloudReady=true;
+    render();
+    notify('Conta conectada e viagens sincronizadas.');
+  }catch(err){
+    console.error(err);
+    cloudReady=false;
+    notify('Não foi possível sincronizar. Confira as tabelas e permissões no Supabase.');
+  }
+}
+function saveLocalOnly(){localStorage.setItem(KEY,JSON.stringify(db));}
+async function syncCloud(){
+  if(!currentUser||!cloudReady)return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer=setTimeout(async()=>{
+    const payload=db.trips.map(t=>({id:String(t.id),owner_id:currentUser.id,name:t.name||'Viagem',trip_data:t}));
+    if(!payload.length)return;
+    const {error}=await supabaseClient.from('trips').upsert(payload,{onConflict:'id'});
+    if(error){console.error(error);notify('Erro ao salvar na nuvem.');}
+  },500);
+}
+async function deleteCloudTrip(tripId){
+  if(!currentUser||!cloudReady)return;
+  const {error}=await supabaseClient.from('trips').delete().eq('id',String(tripId));
+  if(error){console.error(error);notify('Não foi possível excluir a viagem da nuvem.');}
+}
+document.getElementById('auth-toggle').onclick=()=>showAuth(authMode==='login'?'signup':'login');
+document.getElementById('auth-form').onsubmit=async e=>{
+  e.preventDefault();authMessage('');
+  const email=document.getElementById('auth-email').value.trim();
+  const password=document.getElementById('auth-password').value;
+  const submit=document.getElementById('auth-submit');submit.disabled=true;
+  try{
+    if(authMode==='signup'){
+      const {data,error}=await supabaseClient.auth.signUp({email,password});
+      if(error)throw error;
+      if(data.session)await applySession(data.session);
+      else authMessage('Cadastro iniciado. Verifique seu e-mail para confirmar a conta.');
+    }else{
+      const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+      if(error)throw error;
+      await applySession(data.session);
+    }
+  }catch(err){authMessage(err.message||'Não foi possível entrar.');}
+  finally{submit.disabled=false;}
+};
+document.getElementById('logout').onclick=async()=>{
+  await supabaseClient.auth.signOut();
+  currentUser=null;cloudReady=false;showAuth('login');
+};
+supabaseClient.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_IN')applySession(session);
+  if(event==='SIGNED_OUT'){currentUser=null;cloudReady=false;showAuth('login');}
+});
+(async()=>{
+  const {data,error}=await supabaseClient.auth.getSession();
+  if(error){showAuth('login');authMessage(error.message);return;}
+  await applySession(data.session);
+})();
 
 render();
 
