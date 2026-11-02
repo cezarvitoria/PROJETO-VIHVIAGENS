@@ -992,6 +992,22 @@ document.getElementById('logout').onclick=async()=>{
   await supabaseClient.auth.signOut();
   currentUser=null;cloudReady=false;showAuth('login');
 };
+        document.getElementById('logout').onclick=async()=>{
+  const button=document.getElementById('logout');
+  button.disabled=true;
+  try{
+    const {error}=await supabaseClient.auth.signOut({scope:'local'});
+    if(error)throw error;
+    currentUser=null;
+    cloudReady=false;
+    showAuth('login');
+  }catch(err){
+    console.error('Erro ao sair:',err);
+    notify('Não foi possível sair: '+(err.message||'erro desconhecido'));
+  }finally{
+    button.disabled=false;
+  }
+};
 supabaseClient.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_IN')applySession(session);
   if(event==='SIGNED_OUT'){currentUser=null;cloudReady=false;showAuth('login');}
